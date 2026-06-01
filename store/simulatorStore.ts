@@ -1,0 +1,337 @@
+"use client";
+
+import { create } from "zustand";
+import { Engine, type Snapshot, type SimStatus } from "@/sim/engine";
+import { parseIntelHex, type ParsedHex } from "@/sim/loader/hexParser";
+import { SWITCH_PINS, keypadCellToMatrix } from "@/lib/boardConfig";
+
+let engine: Engine | null = null;
+export function getEngine(): Engine {
+  if (!engine) engine = new Engine();
+  return engine;
+}
+
+export type SimSpeed = 0.25 | 0.5 | 1 | 2 | 10 | "max";
+
+const BASE_BUDGET = 40_000;
+
+interface LoadSummary {
+  name: string;
+  byteCount: number;
+  entryPoint: number;
+  minAddress: number;
+  maxAddress: number;
+}
+
+interface StepperState {
+  steps: number;
+  angle: number;
+  cw: boolean;
+  coils: number;
+  prevCoils: number;
+}
+
+// Full-step CW sequences for detecting direction
+const CW_SEQ = [0b1000, 0b0100, 0b0010, 0b0001];
+
+interface SimState {
+  snap: Snapshot;
+  status: SimStatus;
+  speed: SimSpeed;
+  hexLoaded: boolean;
+  load: LoadSummary | null;
+  error: string | null;
+  serial: string;
+  breakpoints: number[];
+  switches: boolean[];
+  bpFlash: number;
+  selectedMemAddr: number;
+  // Phase 2 state
+  adcInputs: number[];
+  sevenSegBuffer: number[];
+  stepperState: StepperState[];
+  elevatorFloor: number;
+  buzzerMuted: boolean;
+  logicHistory: number[];  // ring buffer of P0[7:0] snapshots (max 1024)
+  show3D: boolean;
+
+  // Actions
+  loadHexText: (text: string, name: string) => void;
+  loadBytes: (bytes: Uint8Array, name: string) => void;
+  loadElf: (bytes: Uint8Array, name: string) => void;
+  run: () => void;
+  pause: () => void;
+  stop: () => void;
+  reset: () => void;
+  stepInto: () => void;
+  stepOver: () => void;
+  stepOut: () => void;
+  setSpeed: (s: SimSpeed) => void;
+  toggleBreakpoint: (addr: number) => void;
+  pressKey: (uiRow: number, uiCol: number, down: boolean) => void;
+  toggleSwitch: (index: number) => void;
+  sendSerial: (text: string) => void;
+  clearSerial: () => void;
+  setMemAddr: (addr: number) => void;
+  setADCInput: (ch: number, value: number) => void;
+  pressElevatorFloor: (floor: number, down: boolean) => void;
+  toggleBuzzerMute: () => void;
+  toggle3D: () => void;
+  refresh: () => void;
+}
+
+let rafId = 0;
+const LOGIC_MAX = 1024;
+
+function decodeTx(bytes: number[]): string {
+  return bytes.map(b => (b === 0x0a || b === 0x0d || b === 0x09 || (b >= 0x20 && b < 0x7f))
+    ? String.fromCharCode(b) : "·").join("");
+}
+
+/** Detect stepper motor step from coil pattern change. */
+function updateStepper(state: StepperState, newCoils: number): StepperState {
+  if (newCoils === state.prevCoils) return state;
+  const cwIdx = CW_SEQ.indexOf(newCoils);
+  const ccwPrev = CW_SEQ.indexOf(state.prevCoils);
+  const isCW = cwIdx >= 0 && ((ccwPrev + 1) % 4) === cwIdx;
+  const isCCW = cwIdx >= 0 && ((ccwPrev - 1 + 4) % 4) === cwIdx;
+  const stepped = isCW || isCCW;
+  return {
+    steps: state.steps + (stepped ? 1 : 0),
+    angle: state.angle + (isCW ? 1.8 : isCCW ? -1.8 : 0),
+    cw: isCW || (!isCCW && state.cw),
+    coils: newCoils,
+    prevCoils: newCoils,
+  };
+}
+
+export const useSim = create<SimState>((set, get) => {
+  const eng = getEngine();
+
+  function pumpSerial() {
+    const tx = eng.uart0.drainTx();
+    if (tx.length) {
+      const chunk = decodeTx(tx);
+      set(st => ({ serial: (st.serial + chunk).slice(-20000) }));
+    }
+  }
+
+  function pumpPeripherals() {
+    const g = eng.gpio;
+    // 7-segment: monitor DATA (P0.19), CLK (P0.20), STROBE (P0.30)
+    // (full shift-register model tracked inside engine GPIO onChange)
+    // Stepper motors
+    const coils1 = (g.out[0] >>> 16) & 0xf; // P0.16-19
+    const coils2 = (g.out[0] >>> 20) & 0xf; // P0.20-23
+    const prev = get().stepperState;
+    const s0 = updateStepper(prev[0], coils1);
+    const s1 = updateStepper(prev[1], coils2);
+
+    // Logic analyzer history
+    const byte = g.pinRegister(0) & 0xff;
+    const prevHistory = get().logicHistory;
+    const newHistory = [...prevHistory, byte].slice(-LOGIC_MAX);
+
+    if (s0 !== prev[0] || s1 !== prev[1] || newHistory.length !== prevHistory.length) {
+      set({ stepperState: [s0, s1], logicHistory: newHistory });
+    }
+
+    // Sync ADC inputs to engine
+    const inputs = get().adcInputs;
+    inputs.forEach((v, ch) => eng.adc1.setInput(ch, v));
+  }
+
+  function loop() {
+    const simStatus = () => eng.status as SimStatus;
+    if (simStatus() !== "running") return;
+    const { speed } = get();
+    if (speed === "max") {
+      const start = performance.now();
+      while (simStatus() === "running" && performance.now() - start < 8) {
+        eng.run(BASE_BUDGET * 6);
+      }
+    } else {
+      eng.run(Math.max(1, Math.round(BASE_BUDGET * speed)));
+    }
+    pumpSerial();
+    pumpPeripherals();
+    const snap = eng.snapshot();
+    const afterStatus = simStatus();
+    set({ snap, status: afterStatus });
+    if (afterStatus === "breakpoint" || afterStatus === "halted" || afterStatus === "error") {
+      if (afterStatus === "breakpoint") set(s => ({ bpFlash: s.bpFlash + 1 }));
+      return;
+    }
+    rafId = requestAnimationFrame(loop);
+  }
+
+  function settleAfterStep() {
+    pumpSerial();
+    pumpPeripherals();
+    set({ snap: eng.snapshot(), status: eng.status });
+  }
+
+  function applySwitches(switches: boolean[]) {
+    SWITCH_PINS.forEach((p, i) => eng.gpio.setExternalPin(p.port, p.pin, !switches[i]));
+  }
+
+  function handleLoad(parsed: ParsedHex, name: string) {
+    applySwitches(get().switches);
+    set({
+      hexLoaded: true,
+      error: null,
+      status: eng.status,
+      snap: eng.snapshot(),
+      serial: "",
+      breakpoints: Array.from(eng.breakpoints).sort((a, b) => a - b),
+      load: {
+        name,
+        byteCount: parsed.byteCount,
+        entryPoint: parsed.entryPoint,
+        minAddress: parsed.minAddress,
+        maxAddress: parsed.maxAddress,
+      },
+      selectedMemAddr: parsed.minAddress < 0x40000000 ? 0 : 0x40000000,
+    });
+  }
+
+  return {
+    snap: eng.snapshot(),
+    status: "idle",
+    speed: 1,
+    hexLoaded: false,
+    load: null,
+    error: null,
+    serial: "",
+    breakpoints: [],
+    switches: new Array(8).fill(false),
+    bpFlash: 0,
+    selectedMemAddr: 0x40000000,
+    adcInputs: new Array(8).fill(512),
+    sevenSegBuffer: new Array(5).fill(0),
+    stepperState: [
+      { steps: 0, angle: 0, cw: true, coils: 0, prevCoils: 0 },
+      { steps: 0, angle: 0, cw: true, coils: 0, prevCoils: 0 },
+    ],
+    elevatorFloor: 0,
+    buzzerMuted: false,
+    logicHistory: [],
+    show3D: false,
+
+    loadHexText(text, name) {
+      try {
+        const parsed = eng.loadHexText(text, name);
+        handleLoad(parsed, name);
+      } catch (e) {
+        set({ error: e instanceof Error ? e.message : String(e), hexLoaded: false });
+      }
+    },
+    loadBytes(bytes, name) {
+      try {
+        const parsed = eng.loadBinary(bytes, name);
+        handleLoad(parsed, name);
+      } catch (e) {
+        set({ error: e instanceof Error ? e.message : String(e), hexLoaded: false });
+      }
+    },
+    loadElf(bytes, name) {
+      try {
+        const parsed = eng.loadElf(bytes, name);
+        handleLoad(parsed, name);
+      } catch (e) {
+        set({ error: e instanceof Error ? e.message : String(e), hexLoaded: false });
+      }
+    },
+    run() {
+      if (!get().hexLoaded) return;
+      cancelAnimationFrame(rafId);
+      eng.status = "running";
+      set({ status: "running" });
+      rafId = requestAnimationFrame(loop);
+    },
+    pause() {
+      cancelAnimationFrame(rafId);
+      eng.status = "paused";
+      set({ status: "paused", snap: eng.snapshot() });
+    },
+    stop() {
+      cancelAnimationFrame(rafId);
+      eng.reset();
+      applySwitches(get().switches);
+      set({ status: eng.hexInfo ? "paused" : "idle", snap: eng.snapshot(), serial: "" });
+    },
+    reset() {
+      cancelAnimationFrame(rafId);
+      eng.reset();
+      applySwitches(get().switches);
+      set({
+        status: eng.hexInfo ? "paused" : "idle",
+        snap: eng.snapshot(), serial: "",
+        stepperState: [
+          { steps: 0, angle: 0, cw: true, coils: 0, prevCoils: 0 },
+          { steps: 0, angle: 0, cw: true, coils: 0, prevCoils: 0 },
+        ],
+        logicHistory: [],
+      });
+    },
+    stepInto() {
+      cancelAnimationFrame(rafId);
+      eng.status = "paused";
+      eng.stepInto();
+      settleAfterStep();
+    },
+    stepOver() {
+      cancelAnimationFrame(rafId);
+      eng.status = "paused";
+      eng.stepOver();
+      settleAfterStep();
+    },
+    stepOut() {
+      cancelAnimationFrame(rafId);
+      eng.status = "paused";
+      eng.stepOut();
+      settleAfterStep();
+    },
+    setSpeed(s) { set({ speed: s }); },
+    toggleBreakpoint(addr) {
+      eng.toggleBreakpoint(addr);
+      set({ breakpoints: Array.from(eng.breakpoints).sort((a, b) => a - b) });
+    },
+    pressKey(uiRow, uiCol, down) {
+      const { row, col } = keypadCellToMatrix(uiRow, uiCol);
+      eng.keypad.setPressed(row, col, down);
+      if (eng.status !== "running") set({ snap: eng.snapshot() });
+    },
+    toggleSwitch(index) {
+      set(st => {
+        const switches = st.switches.slice();
+        switches[index] = !switches[index];
+        applySwitches(switches);
+        return { switches, snap: eng.snapshot() };
+      });
+    },
+    sendSerial(text) {
+      eng.uart0.feedRx(Array.from(text, c => c.charCodeAt(0) & 0xff));
+      set(st => ({ serial: st.serial + text }));
+    },
+    clearSerial() { set({ serial: "" }); },
+    setMemAddr(addr) { set({ selectedMemAddr: addr >>> 0 }); },
+    setADCInput(ch, value) {
+      eng.adc1.setInput(ch, value);
+      set(st => {
+        const adcInputs = [...st.adcInputs];
+        adcInputs[ch] = value;
+        return { adcInputs };
+      });
+    },
+    pressElevatorFloor(floor, down) {
+      eng.gpio.setExternalPin(0, 16 + floor, !down);
+      if (!down) {
+        set({ elevatorFloor: floor });
+      }
+    },
+    toggleBuzzerMute() { set(st => ({ buzzerMuted: !st.buzzerMuted })); },
+    toggle3D() { set(st => ({ show3D: !st.show3D })); },
+    refresh() { set({ snap: eng.snapshot(), status: eng.status }); },
+  };
+});
