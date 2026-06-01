@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { useSim } from "@/store/simulatorStore";
+import { useSim, type PeriphKey } from "@/store/simulatorStore";
 import { LPC2148IC } from "./LPC2148IC";
 import { Board3D } from "./Board3D";
 import { LCDDisplay } from "../peripherals/LCDDisplay";
@@ -17,25 +17,63 @@ import { ADCInputs } from "../peripherals/ADCInputs";
 import { DACOutput } from "../peripherals/DACOutput";
 import { ElevatorInterface } from "../peripherals/ElevatorInterface";
 import { cn } from "@/lib/cn";
-import { UploadSimple, Circuitry, Cube, Monitor } from "@phosphor-icons/react";
+import { UploadSimple, Circuitry, Cube, Monitor, Plugs, PlugsConnected } from "@phosphor-icons/react";
 
+/**
+ * A board peripheral zone. When `periphKey` is given, a connect/disconnect
+ * toggle appears in the header and the zone dims + ignores input while
+ * disconnected, so a lab program only drives the peripherals you select.
+ */
 function Zone({
-  label, className, children,
+  label, periphKey, className, children,
 }: {
-  label: string; className?: string; children: React.ReactNode;
+  label: string; periphKey?: PeriphKey; className?: string; children: React.ReactNode;
 }) {
+  const connected = useSim(s => (periphKey ? s.connected[periphKey] : true));
+  const toggle = useSim(s => s.togglePeripheral);
+  const off = periphKey != null && !connected;
+
   return (
     <div
       className={cn(
-        "relative rounded-lg border border-[#2a4a35] bg-[#0e1b12] p-4 pt-6",
+        "relative rounded-lg border bg-[#0e1b12] p-4 pt-7 transition-colors",
+        off ? "border-[#23332a]" : "border-[#2a4a35]",
         "shadow-[inset_0_1px_0_rgba(74,222,128,0.04),inset_0_0_24px_rgba(0,0,0,0.3)]",
         className,
       )}
     >
-      <span className="absolute left-3 top-1.5 font-mono text-[9px] uppercase tracking-[0.22em] text-[#4a7a5a]">
+      <span className={cn(
+        "pointer-events-none absolute left-3 top-1.5 z-20 font-mono text-[9px] uppercase tracking-[0.22em]",
+        off ? "text-[#3a4a40]" : "text-[#4a7a5a]",
+      )}>
         {label}
       </span>
+
+      {periphKey && (
+        <button
+          type="button"
+          onClick={() => toggle(periphKey)}
+          title={connected ? "Disconnect from board" : "Connect to board"}
+          aria-label={connected ? `Disconnect ${label}` : `Connect ${label}`}
+          className={cn(
+            "absolute right-2 top-1.5 z-20 flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-[9px] transition-colors",
+            connected ? "text-signal hover:bg-[rgba(74,222,128,0.1)]"
+                      : "text-muted/50 hover:bg-pane hover:text-muted",
+          )}
+        >
+          {connected ? <PlugsConnected size={11} weight="bold" /> : <Plugs size={11} />}
+          {connected ? "ON" : "OFF"}
+        </button>
+      )}
+
       {children}
+
+      {/* Disconnected scrim — dims content and blocks interaction */}
+      {off && (
+        <div className="absolute inset-0 z-10 flex items-end justify-center rounded-lg bg-[#0b1410]/70 pb-2 backdrop-grayscale">
+          <span className="font-mono text-[9px] text-muted/60">disconnected · click ON to wire</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -122,13 +160,13 @@ export function BoardCanvas() {
         <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-4 p-4">
           {/* Row 1: LCD + 7-Seg + Keypad — wraps to 1 col below md, 2 below lg */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-            <Zone label="20×4 Alphanumeric LCD" className="flex min-w-0 items-center justify-center overflow-x-auto">
+            <Zone periphKey="lcd" label="20×4 Alphanumeric LCD" className="flex min-w-0 items-center justify-center overflow-x-auto">
               <LCDDisplay />
             </Zone>
-            <Zone label="7-Segment Display (5-digit)" className="flex min-w-0 items-center justify-center overflow-x-auto">
+            <Zone periphKey="sevenSeg" label="7-Segment Display (5-digit)" className="flex min-w-0 items-center justify-center overflow-x-auto">
               <SevenSegDisplay />
             </Zone>
-            <Zone label="Matrix Keypad" className="flex min-w-0 items-center justify-center">
+            <Zone periphKey="keypad" label="Matrix Keypad" className="flex min-w-0 items-center justify-center">
               <MatrixKeypad />
             </Zone>
           </div>
@@ -136,10 +174,10 @@ export function BoardCanvas() {
           {/* Row 2: Analog I/O + LPC2148 IC + Motors */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-[minmax(200px,240px)_minmax(0,1fr)_minmax(200px,240px)]">
             <div className="flex min-w-0 flex-col gap-4">
-              <Zone label="ADC Inputs · LDR / Temp / Pot">
+              <Zone periphKey="adc" label="ADC Inputs · LDR / Temp / Pot">
                 <ADCInputs />
               </Zone>
-              <Zone label="DAC Output · P0.25 AOUT" className="flex items-center justify-center">
+              <Zone periphKey="dac" label="DAC Output · P0.25 AOUT" className="flex items-center justify-center">
                 <DACOutput />
               </Zone>
             </div>
@@ -147,39 +185,39 @@ export function BoardCanvas() {
               <LPC2148IC />
             </Zone>
             <div className="flex min-w-0 flex-col gap-4">
-              <Zone label="DC Motor · DRV8801" className="flex items-center justify-center">
+              <Zone periphKey="dcMotor" label="DC Motor · DRV8801" className="flex items-center justify-center">
                 <DCMotor />
               </Zone>
-              <Zone label="Servo 1 · PWM4" className="flex items-center justify-center">
+              <Zone periphKey="servo1" label="Servo 1 · PWM4" className="flex items-center justify-center">
                 <ServoMotor id={1} />
               </Zone>
             </div>
           </div>
 
-          {/* Row 3: Logic Controller + Stepper + Servo 2 */}
+          {/* Row 3: Logic Controller + Steppers */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(180px,220px)_minmax(180px,220px)]">
             <Zone label="Logic Controller · 8 LED + 8 Switch" className="flex min-w-0 flex-col items-center gap-4 overflow-x-auto">
               <LEDArray />
               <div className="h-px w-3/4 bg-line" />
               <SwitchArray />
             </Zone>
-            <Zone label="Stepper 1 · ULN2803" className="flex items-center justify-center">
+            <Zone periphKey="stepper1" label="Stepper 1 · ULN2803" className="flex items-center justify-center">
               <StepperMotor id={1} />
             </Zone>
-            <Zone label="Stepper 2 · ULN2803" className="flex items-center justify-center">
+            <Zone periphKey="stepper2" label="Stepper 2 · ULN2803" className="flex items-center justify-center">
               <StepperMotor id={2} />
             </Zone>
           </div>
 
           {/* Row 4: Elevator + Servo 2 + Buzzer */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <Zone label="Elevator Interface" className="flex items-center justify-center">
+            <Zone periphKey="elevator" label="Elevator Interface" className="flex items-center justify-center">
               <ElevatorInterface />
             </Zone>
-            <Zone label="Servo 2 · PWM5" className="flex items-center justify-center">
+            <Zone periphKey="servo2" label="Servo 2 · PWM5" className="flex items-center justify-center">
               <ServoMotor id={2} />
             </Zone>
-            <Zone label="Buzzer · PWM1 / GPIO" className="flex items-center justify-center">
+            <Zone periphKey="buzzer" label="Buzzer · PWM1 / GPIO" className="flex items-center justify-center">
               <Buzzer />
             </Zone>
           </div>

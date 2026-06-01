@@ -13,6 +13,7 @@ import { RTC } from "./peripherals/rtc";
 import { SystemControl, PinConnect } from "./peripherals/sysctl";
 import { LCD, type LCDState } from "./peripherals/lcd";
 import { Keypad } from "./peripherals/keypad";
+import { SevenSeg } from "./peripherals/sevenseg";
 import type { Peripheral } from "./peripherals/types";
 import { parseIntelHex, parseBinary, type ParsedHex } from "./loader/hexParser";
 import { parseElf, type ElfSymbol } from "../lib/elfParser";
@@ -53,6 +54,7 @@ export interface Snapshot {
   periph: PeriphSnapshot;
   lcd: LCDState;
   lcdRevision: number;
+  sevenSeg: number[];
   status: SimStatus;
   warnings: number;
 }
@@ -85,6 +87,7 @@ export class Engine {
   readonly pinconnect = new PinConnect();
   readonly lcd: LCD;
   readonly keypad: Keypad;
+  readonly sevenSeg: SevenSeg;
 
   private tickables: Peripheral[] = [];
 
@@ -108,6 +111,7 @@ export class Engine {
     this.spi1 = new SPI(0xe0068000, "SPI1");
     this.lcd = new LCD(this.gpio);
     this.keypad = new Keypad(this.gpio);
+    this.sevenSeg = new SevenSeg(this.gpio);
 
     const devices: Peripheral[] = [
       this.gpio, this.uart0, this.uart1,
@@ -169,7 +173,7 @@ export class Engine {
     this.vic.reset(); this.i2c0.reset(); this.i2c1.reset();
     this.spi0.reset(); this.spi1.reset();
     this.rtc.reset(); this.sysctl.reset(); this.pinconnect.reset();
-    this.lcd.reset(); this.keypad.reset();
+    this.lcd.reset(); this.keypad.reset(); this.sevenSeg.reset();
     this.cpu.reset();
     this.cpu.pc = this.entryPoint >>> 0;
     this.bus.cycleRef.value = 0;
@@ -286,6 +290,7 @@ export class Engine {
       },
       lcd: this.lcd.getState(),
       lcdRevision: this.lcd.revision,
+      sevenSeg: this.sevenSeg.getDigits(),
       status: this.status,
       warnings: this.bus.warnings.length,
     };

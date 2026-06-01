@@ -54,6 +54,8 @@ interface SimState {
   buzzerMuted: boolean;
   logicHistory: number[];  // ring buffer of P0[7:0] snapshots (max 1024)
   show3D: boolean;
+  /** Which board peripherals are "wired" to the MCU pins (user-selectable). */
+  connected: Record<PeriphKey, boolean>;
 
   // Actions
   loadHexText: (text: string, name: string) => void;
@@ -77,8 +79,27 @@ interface SimState {
   pressElevatorFloor: (floor: number, down: boolean) => void;
   toggleBuzzerMute: () => void;
   toggle3D: () => void;
+  togglePeripheral: (key: PeriphKey) => void;
   refresh: () => void;
 }
+
+/** Selectable board peripherals (those that interpret shared MCU pins). */
+export type PeriphKey =
+  | "lcd" | "sevenSeg" | "keypad" | "leds" | "switches"
+  | "dcMotor" | "stepper1" | "stepper2" | "servo1" | "servo2"
+  | "buzzer" | "elevator" | "adc" | "dac";
+
+/**
+ * Default wiring. The peripherals that aggressively react to the heavily
+ * multiplexed P0.16–P0.23 / PWM lines (7-seg, steppers, motors, servos,
+ * buzzer, elevator) start DISCONNECTED so a given lab program only drives the
+ * peripherals it actually uses. The user connects others as needed.
+ */
+const DEFAULT_CONNECTED: Record<PeriphKey, boolean> = {
+  lcd: true, keypad: true, leds: true, switches: true, adc: true, dac: true,
+  sevenSeg: false, dcMotor: false, stepper1: false, stepper2: false,
+  servo1: false, servo2: false, buzzer: false, elevator: false,
+};
 
 let rafId = 0;
 const LOGIC_MAX = 1024;
@@ -107,6 +128,10 @@ function updateStepper(state: StepperState, newCoils: number): StepperState {
 
 export const useSim = create<SimState>((set, get) => {
   const eng = getEngine();
+  // Ensure engine peripheral flags match the default wiring at startup.
+  eng.lcd.setEnabled(DEFAULT_CONNECTED.lcd);
+  eng.keypad.setEnabled(DEFAULT_CONNECTED.keypad);
+  eng.sevenSeg.setEnabled(DEFAULT_CONNECTED.sevenSeg);
 
   function pumpSerial() {
     const tx = eng.uart0.drainTx();
@@ -118,23 +143,22 @@ export const useSim = create<SimState>((set, get) => {
 
   function pumpPeripherals() {
     const g = eng.gpio;
-    // 7-segment: monitor DATA (P0.19), CLK (P0.20), STROBE (P0.30)
-    // (full shift-register model tracked inside engine GPIO onChange)
-    // Stepper motors
+    const { connected, stepperState: prev } = get();
+
+    // Steppers only advance when connected (they share P0.16–23 with the LCD).
     const coils1 = (g.out[0] >>> 16) & 0xf; // P0.16-19
     const coils2 = (g.out[0] >>> 20) & 0xf; // P0.20-23
-    const prev = get().stepperState;
-    const s0 = updateStepper(prev[0], coils1);
-    const s1 = updateStepper(prev[1], coils2);
+    const s0 = connected.stepper1 ? updateStepper(prev[0], coils1) : prev[0];
+    const s1 = connected.stepper2 ? updateStepper(prev[1], coils2) : prev[1];
 
-    // Logic analyzer history
+    // Logic analyzer history (always tracked — it is a passive probe)
     const byte = g.pinRegister(0) & 0xff;
     const prevHistory = get().logicHistory;
     const newHistory = [...prevHistory, byte].slice(-LOGIC_MAX);
 
-    if (s0 !== prev[0] || s1 !== prev[1] || newHistory.length !== prevHistory.length) {
-      set({ stepperState: [s0, s1], logicHistory: newHistory });
-    }
+    const sevenSeg = eng.sevenSeg.getDigits();
+
+    set({ stepperState: [s0, s1], logicHistory: newHistory, sevenSegBuffer: sevenSeg });
 
     // Sync ADC inputs to engine
     const inputs = get().adcInputs;
@@ -217,6 +241,7 @@ export const useSim = create<SimState>((set, get) => {
     buzzerMuted: false,
     logicHistory: [],
     show3D: false,
+    connected: { ...DEFAULT_CONNECTED },
 
     loadHexText(text, name) {
       try {
@@ -333,6 +358,20 @@ export const useSim = create<SimState>((set, get) => {
     },
     toggleBuzzerMute() { set(st => ({ buzzerMuted: !st.buzzerMuted })); },
     toggle3D() { set(st => ({ show3D: !st.show3D })); },
+    togglePeripheral(key) {
+      set(st => {
+        const connected = { ...st.connected, [key]: !st.connected[key] };
+        applyConnections(connected);
+        return { connected, snap: eng.snapshot() };
+      });
+    },
     refresh() { set({ snap: eng.snapshot(), status: eng.status }); },
   };
+
+  /** Push connection flags into the engine peripherals that snoop the bus. */
+  function applyConnections(c: Record<PeriphKey, boolean>) {
+    eng.lcd.setEnabled(c.lcd);
+    eng.keypad.setEnabled(c.keypad);
+    eng.sevenSeg.setEnabled(c.sevenSeg);
+  }
 });

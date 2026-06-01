@@ -75,6 +75,25 @@ The right side shows the live **PC**, **cycle counter**, and **status**
 
 Each peripheral zone is wired to real LPC2148 pins (shown in each zone's label).
 
+### Connecting / disconnecting peripherals (important)
+
+The RV-IoT board multiplexes many peripherals onto the **same pins** (e.g. the
+LCD, keypad, 7-segment, and stepper motors all share P0.16–P0.23). On real
+hardware you wire up only the peripheral you're using. LOKI-SIM mirrors this:
+each peripheral zone has an **ON / OFF connect toggle** in its top-right corner.
+
+- A **disconnected** peripheral is dimmed and **ignores all bus activity**, so a
+  program only drives the peripherals you actually connect.
+- This stops every shared-pin peripheral from reacting at once.
+
+**Defaults:** LCD, Keypad, LEDs, Switches, ADC, and DAC start **connected**.
+The 7-segment, DC motor, steppers, servos, buzzer, and elevator start
+**disconnected** — click their **ON** toggle when your program uses them.
+
+> Example: the LCD lab (`lab7.hex`) only needs the LCD. Leave everything else
+> disconnected and just the LCD lights up. For a stepper lab, click **ON** on
+> the Stepper zone (and optionally disconnect the LCD/keypad).
+
 ### Displays
 - **20×4 LCD (HD44780)** — D4-D7 = P0.16-P0.19, RS = P0.20, EN = P1.25.
   Renders characters your program writes. Click it to toggle the backlight.

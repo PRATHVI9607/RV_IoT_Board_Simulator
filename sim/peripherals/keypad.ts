@@ -25,6 +25,9 @@ export class Keypad {
     [false, false, false, false],
   ];
 
+  /** Whether the keypad is wired to the board (user-selectable). */
+  enabled = true;
+
   constructor(private gpio: GPIO) {
     gpio.onChange(() => this.evaluate());
     this.evaluate();
@@ -33,6 +36,17 @@ export class Keypad {
   reset(): void {
     for (const row of this.pressed) row.fill(false);
     this.evaluate();
+  }
+
+  setEnabled(on: boolean): void {
+    if (this.enabled === on) return;
+    this.enabled = on;
+    if (!on) {
+      // Release the column lines (float high) when disconnected.
+      for (let col = 0; col < 4; col++) this.gpio.setExternalPin(COL_PORT, COL_BASE + col, true);
+    } else {
+      this.evaluate();
+    }
   }
 
   /** row 0..3 (P0.16+), col 0..3 (P1.16+). */
@@ -46,6 +60,7 @@ export class Keypad {
   }
 
   private evaluate(): void {
+    if (!this.enabled) return;
     for (let col = 0; col < 4; col++) {
       let low = false;
       for (let row = 0; row < 4; row++) {

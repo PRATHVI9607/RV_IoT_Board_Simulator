@@ -26,7 +26,7 @@ import type { AccessSize, Peripheral } from "./types";
 export class VIC implements Peripheral {
   readonly name = "VIC";
   readonly base = 0xfffff000;
-  readonly size = 0x300;
+  readonly size = 0x1000; // full 4 KB VIC window (UM10139 §5)
 
   private rawIntr = 0;   // raw interrupt inputs (from peripherals)
   private intSel = 0;    // 0=IRQ, 1=FIQ

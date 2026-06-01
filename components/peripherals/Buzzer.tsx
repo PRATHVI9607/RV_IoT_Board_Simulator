@@ -14,10 +14,11 @@ export function Buzzer() {
   const gpio = useSim((s) => s.snap.gpio);
   const muted = useSim((s) => s.buzzerMuted);
   const toggleMute = useSim((s) => s.toggleBuzzerMute);
+  const connected = useSim((s) => s.connected.buzzer);
 
-  // Buzzer active when any relevant output pin is high (P0.16-P0.19 via ULN2803)
+  // Buzzer active when wired AND any relevant output pin is high (P0.16-19 via ULN2803)
   const gpioOn = (gpio.out[0] & 0x000f0000) !== 0 && (gpio.dir[0] & 0x000f0000) !== 0;
-  const active = duty > 0.01 || gpioOn;
+  const active = connected && (duty > 0.01 || gpioOn);
 
   const ctxRef = useRef<AudioContext | null>(null);
   const oscRef = useRef<OscillatorNode | null>(null);
