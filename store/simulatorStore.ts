@@ -325,10 +325,11 @@ export const useSim = create<SimState>((set, get) => {
       });
     },
     pressElevatorFloor(floor, down) {
+      // Active-low call button on P0.16+floor: pressed = LOW.
       eng.gpio.setExternalPin(0, 16 + floor, !down);
-      if (!down) {
-        set({ elevatorFloor: floor });
-      }
+      if (!down) set({ elevatorFloor: floor });
+      // Reflect the input change immediately when paused.
+      if (eng.status !== "running") set({ snap: eng.snapshot() });
     },
     toggleBuzzerMute() { set(st => ({ buzzerMuted: !st.buzzerMuted })); },
     toggle3D() { set(st => ({ show3D: !st.show3D })); },

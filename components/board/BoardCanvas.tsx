@@ -119,23 +119,23 @@ export function BoardCanvas() {
       {hexLoaded && show3D ? (
         <Board3D />
       ) : (
-        <div className="mx-auto flex max-w-[1100px] flex-col gap-4 p-5">
-          {/* Row 1: LCD + 7-Seg + Keypad */}
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-            <Zone label="20×4 Alphanumeric LCD" className="flex items-center justify-center">
+        <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-4 p-4">
+          {/* Row 1: LCD + 7-Seg + Keypad — wraps to 1 col below md, 2 below lg */}
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <Zone label="20×4 Alphanumeric LCD" className="flex min-w-0 items-center justify-center overflow-x-auto">
               <LCDDisplay />
             </Zone>
-            <Zone label="7-Segment Display (5-digit)" className="flex items-center justify-center">
+            <Zone label="7-Segment Display (5-digit)" className="flex min-w-0 items-center justify-center overflow-x-auto">
               <SevenSegDisplay />
             </Zone>
-            <Zone label="Matrix Keypad" className="flex items-center justify-center">
+            <Zone label="Matrix Keypad" className="flex min-w-0 items-center justify-center">
               <MatrixKeypad />
             </Zone>
           </div>
 
           {/* Row 2: Analog I/O + LPC2148 IC + Motors */}
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[240px_1fr_240px]">
-            <div className="flex flex-col gap-4">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-[minmax(200px,240px)_minmax(0,1fr)_minmax(200px,240px)]">
+            <div className="flex min-w-0 flex-col gap-4">
               <Zone label="ADC Inputs · LDR / Temp / Pot">
                 <ADCInputs />
               </Zone>
@@ -143,10 +143,10 @@ export function BoardCanvas() {
                 <DACOutput />
               </Zone>
             </div>
-            <Zone label="LPC2148 · ARM7TDMI-S Core" className="flex justify-center">
+            <Zone label="LPC2148 · ARM7TDMI-S Core" className="flex min-w-0 justify-center overflow-x-auto">
               <LPC2148IC />
             </Zone>
-            <div className="flex flex-col gap-4">
+            <div className="flex min-w-0 flex-col gap-4">
               <Zone label="DC Motor · DRV8801" className="flex items-center justify-center">
                 <DCMotor />
               </Zone>
@@ -156,9 +156,9 @@ export function BoardCanvas() {
             </div>
           </div>
 
-          {/* Row 3: Logic Controller + Stepper + Elevator + Buzzer */}
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_160px_160px_120px]">
-            <Zone label="Logic Controller · 8 LED + 8 Switch" className="flex flex-col items-center gap-4">
+          {/* Row 3: Logic Controller + Stepper + Servo 2 */}
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(180px,220px)_minmax(180px,220px)]">
+            <Zone label="Logic Controller · 8 LED + 8 Switch" className="flex min-w-0 flex-col items-center gap-4 overflow-x-auto">
               <LEDArray />
               <div className="h-px w-3/4 bg-line" />
               <SwitchArray />
@@ -166,10 +166,20 @@ export function BoardCanvas() {
             <Zone label="Stepper 1 · ULN2803" className="flex items-center justify-center">
               <StepperMotor id={1} />
             </Zone>
+            <Zone label="Stepper 2 · ULN2803" className="flex items-center justify-center">
+              <StepperMotor id={2} />
+            </Zone>
+          </div>
+
+          {/* Row 4: Elevator + Servo 2 + Buzzer */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Zone label="Elevator Interface" className="flex items-center justify-center">
               <ElevatorInterface />
             </Zone>
-            <Zone label="Buzzer" className="flex items-center justify-center">
+            <Zone label="Servo 2 · PWM5" className="flex items-center justify-center">
+              <ServoMotor id={2} />
+            </Zone>
+            <Zone label="Buzzer · PWM1 / GPIO" className="flex items-center justify-center">
               <Buzzer />
             </Zone>
           </div>

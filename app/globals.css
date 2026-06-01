@@ -214,6 +214,11 @@ body {
   image-rendering: pixelated;
 }
 
+/* Elevator shaft floor cell — fixed minimum height so the shaft is always legible */
+.elevator-floor-cell {
+  min-height: 42px;
+}
+
 /* Top-level simulator IDE shell */
 .sim-shell {
   font-family: var(--font-sans);

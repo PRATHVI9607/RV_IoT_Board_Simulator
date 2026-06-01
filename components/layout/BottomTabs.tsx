@@ -8,61 +8,74 @@ import { WiringCanvas } from "@/components/wiring/WiringCanvas";
 import { Panel } from "@/components/ui/Panel";
 import { useSim, getEngine } from "@/store/simulatorStore";
 
-const TABS = ["Serial Monitor", "Oscilloscope", "Logic Analyzer", "Wiring", "Event Log"] as const;
-type Tab = (typeof TABS)[number];
+const TABS = [
+  { id: "serial",   label: "Serial Monitor" },
+  { id: "scope",    label: "Oscilloscope" },
+  { id: "logic",    label: "Logic Analyzer" },
+  { id: "wiring",   label: "Wiring" },
+  { id: "events",   label: "Event Log" },
+] as const;
+type TabId = (typeof TABS)[number]["id"];
 
 export function BottomTabs() {
-  const [active, setActive] = useState<Tab>("Serial Monitor");
+  const [active, setActive] = useState<TabId>("serial");
   const warnings = useSim((s) => s.snap.warnings);
 
   return (
-    <Panel className="h-[220px] overflow-hidden">
-      <div className="flex shrink-0 items-center gap-0.5 border-b border-line px-2">
+    <Panel className="flex h-full flex-col overflow-hidden">
+      {/* Tab bar — large, accessible buttons */}
+      <div className="flex shrink-0 items-stretch border-b border-line">
         {TABS.map(t => (
           <button
             type="button"
-            key={t}
-            onClick={() => setActive(t)}
-            className={`flex items-center gap-1 px-3 py-2 font-mono text-[11px] transition-colors ${
-              active === t ? "border-b-2 border-accent text-accent" : "text-muted hover:text-fg"
-            }`}
+            key={t.id}
+            onClick={() => setActive(t.id)}
+            className={[
+              "relative flex-1 px-2 py-2.5 font-mono text-[11px] font-medium transition-colors",
+              "hover:bg-pane focus-visible:z-10",
+              active === t.id
+                ? "bg-pane text-accent after:absolute after:bottom-0 after:inset-x-0 after:h-[2px] after:bg-accent"
+                : "text-muted",
+            ].join(" ")}
           >
-            {t}
-            {t === "Event Log" && warnings > 0 && (
-              <span className="rounded-full bg-signal-red/20 px-1 font-mono text-[9px] text-signal-red">
-                {warnings}
+            {t.label}
+            {t.id === "events" && warnings > 0 && (
+              <span className="ml-1 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-signal-red/20 px-1 font-mono text-[9px] text-signal-red">
+                {warnings > 99 ? "99+" : warnings}
               </span>
             )}
           </button>
         ))}
       </div>
+
+      {/* Tab content — min-h-0 so it doesn't push tab bar off screen */}
       <div className="min-h-0 flex-1 overflow-hidden">
-        {active === "Serial Monitor"  && <SerialMonitor />}
-        {active === "Oscilloscope"    && <Oscilloscope />}
-        {active === "Logic Analyzer"  && <LogicAnalyzer />}
-        {active === "Wiring"          && <WiringCanvas />}
-        {active === "Event Log"       && <EventLog />}
+        {active === "serial"  && <SerialMonitor />}
+        {active === "scope"   && <Oscilloscope />}
+        {active === "logic"   && <LogicAnalyzer />}
+        {active === "wiring"  && <WiringCanvas />}
+        {active === "events"  && <EventLog />}
       </div>
     </Panel>
   );
 }
 
 function EventLog() {
-  useSim((s) => s.snap.warnings); // re-subscribe
+  useSim((s) => s.snap.warnings);
   const eng = getEngine();
-  const warnList = eng.bus.warnings.slice(-50);
+  const warnList = eng.bus.warnings.slice(-100);
 
   return (
-    <div className="overflow-auto p-2">
+    <div className="h-full overflow-auto p-3">
       {warnList.length === 0 ? (
         <p className="font-mono text-[11px] text-muted/60">
-          Bus warnings (unmapped reads/writes) appear here.
+          No bus warnings. Unmapped reads/writes (e.g. accessing 0xFFFFFFFF) appear here.
         </p>
       ) : (
         <ul className="space-y-0.5">
-          {warnList.map((w, i) => (
+          {[...warnList].reverse().map((w, i) => (
             <li key={i} className="font-mono text-[10px] text-signal-amber">
-              cyc {w.cycle}: {w.message}
+              <span className="text-muted/60">cyc {w.cycle}</span> {w.message}
             </li>
           ))}
         </ul>

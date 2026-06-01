@@ -1,66 +1,64 @@
 "use client";
 
 import { useState } from "react";
-import { Panel } from "@/components/ui/Panel";
 import { RegisterWindow } from "./RegisterWindow";
 import { Disassembler } from "./Disassembler";
 import { MemoryViewer } from "./MemoryViewer";
 import { BreakpointList } from "./BreakpointList";
 import { VICPanel } from "./VICPanel";
 import { PeripheralRegs } from "./PeripheralRegs";
+import { cn } from "@/lib/cn";
 
-const TABS = ["CPU", "Peripherals", "VIC"] as const;
-type Tab = (typeof TABS)[number];
+const TABS = [
+  { id: "cpu",   label: "CPU",   short: "CPU" },
+  { id: "periph",label: "Periph",short: "PER" },
+  { id: "vic",   label: "VIC",   short: "VIC" },
+] as const;
+type TabId = (typeof TABS)[number]["id"];
 
 export function DebugPanel() {
-  const [tab, setTab] = useState<Tab>("CPU");
+  const [tab, setTab] = useState<TabId>("cpu");
 
   return (
-    <div className="flex h-full flex-col gap-2 overflow-hidden">
-      {/* Tab switcher */}
-      <div className="flex shrink-0 gap-0.5 rounded-md border border-line bg-panel px-1 py-0.5">
+    <div className="flex h-full flex-col overflow-hidden rounded-lg border border-line bg-panel">
+      {/* Tab header — part of the panel chrome */}
+      <div className="flex shrink-0 items-stretch border-b border-line">
         {TABS.map(t => (
           <button
             type="button"
-            key={t}
-            onClick={() => setTab(t)}
-            className={`flex-1 rounded py-1 text-center font-mono text-[10px] transition-colors ${
-              tab === t ? "bg-pane text-accent" : "text-muted hover:text-fg"
-            }`}
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={cn(
+              "flex-1 py-2 text-center font-mono text-[11px] font-semibold tracking-wide transition-colors",
+              "hover:bg-pane focus-visible:z-10",
+              tab === t.id
+                ? "bg-pane text-accent"
+                : "text-muted",
+            )}
           >
-            {t}
+            {t.label}
           </button>
         ))}
       </div>
 
-      {tab === "CPU" && (
-        <>
-          <Panel className="shrink-0">
-            <RegisterWindow />
-          </Panel>
-          <Panel className="shrink-0">
-            <BreakpointList />
-          </Panel>
-          <Panel className="shrink-0">
-            <Disassembler />
-          </Panel>
-          <Panel className="min-h-0 flex-1 overflow-hidden">
-            <MemoryViewer />
-          </Panel>
-        </>
-      )}
+      {/* Tab content — scrollable, fills remaining space */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {tab === "cpu"    && <CPUTab />}
+        {tab === "periph" && <PeripheralRegs />}
+        {tab === "vic"    && <VICPanel />}
+      </div>
+    </div>
+  );
+}
 
-      {tab === "Peripherals" && (
-        <Panel className="min-h-0 flex-1 overflow-hidden">
-          <PeripheralRegs />
-        </Panel>
-      )}
-
-      {tab === "VIC" && (
-        <Panel className="min-h-0 flex-1 overflow-hidden">
-          <VICPanel />
-        </Panel>
-      )}
+/** CPU tab — registers, disasm, memory, breakpoints stacked vertically and scrollable */
+function CPUTab() {
+  return (
+    <div className="flex flex-col divide-y divide-line">
+      <RegisterWindow />
+      <Disassembler />
+      <BreakpointList />
+      <MemoryViewer />
     </div>
   );
 }
