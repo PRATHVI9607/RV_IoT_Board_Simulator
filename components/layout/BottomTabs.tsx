@@ -4,12 +4,14 @@ import { useState } from "react";
 import { SerialMonitor } from "@/components/instruments/SerialMonitor";
 import { Oscilloscope } from "@/components/instruments/Oscilloscope";
 import { LogicAnalyzer } from "@/components/instruments/LogicAnalyzer";
+import { PinControl } from "@/components/instruments/PinControl";
 import { WiringCanvas } from "@/components/wiring/WiringCanvas";
 import { Panel } from "@/components/ui/Panel";
 import { useSim, getEngine } from "@/store/simulatorStore";
 
 const TABS = [
   { id: "serial",   label: "Serial Monitor" },
+  { id: "pins",     label: "GPIO Pins" },
   { id: "scope",    label: "Oscilloscope" },
   { id: "logic",    label: "Logic Analyzer" },
   { id: "wiring",   label: "Wiring" },
@@ -51,6 +53,7 @@ export function BottomTabs() {
       {/* Tab content — min-h-0 so it doesn't push tab bar off screen */}
       <div className="min-h-0 flex-1 overflow-hidden">
         {active === "serial"  && <SerialMonitor />}
+        {active === "pins"    && <PinControl />}
         {active === "scope"   && <Oscilloscope />}
         {active === "logic"   && <LogicAnalyzer />}
         {active === "wiring"  && <WiringCanvas />}

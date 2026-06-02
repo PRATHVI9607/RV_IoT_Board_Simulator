@@ -312,8 +312,9 @@ export class ARM7 {
     const c = op >>> 28;
     if (!this.cond(c)) return;
 
-    // Branch and Branch with Link (and BX via 0x12 special form below)
-    if ((op & 0x0f000000) === 0x0a000000) {
+    // Branch and Branch with Link (and BX via 0x12 special form below).
+    // Mask 0x0e so both B (opcode 0xA) and BL (opcode 0xB, bit24=L) match.
+    if ((op & 0x0e000000) === 0x0a000000) {
       // B / BL
       let off = op & 0x00ffffff;
       if (off & 0x00800000) off |= 0xff000000; // sign extend

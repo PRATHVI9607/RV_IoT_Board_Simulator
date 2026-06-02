@@ -164,7 +164,8 @@ raw / pending / FIQ status. Pending interrupts highlight red.
 | Tab | Use |
 |-----|-----|
 | **Serial Monitor** | UART0 terminal. Output from your program appears here. Type in the input box and press Enter (or the send button) to send data to the CPU's RX. Baud rate is shown. |
-| **Oscilloscope** | 4-channel scope. CH1 = DAC, CH2 = PWM6, CH3 = P0.0, CH4 = P0.1. Adjust the timebase, toggle **CRT** phosphor mode, pause, and export a PNG. |
+| **GPIO Pins** | Direct pin control. Lists every pin (P0.0–P0.31, P1.16–P1.31) with its direction (IN/OUT) and live level. Click any **INPUT** pin's HIGH/LOW button to drive it by hand — handy for feeding switch/sensor inputs without wiring a peripheral. |
+| **Oscilloscope** | 4-channel scope. CH1 = DAC, CH2 = PWM6, CH3 = P0.0, CH4 = P0.1. Adjust the timebase, toggle **CRT** phosphor mode, pause, and export a PNG. Run a DAC program (e.g. the waveform lab) and watch CH1 trace the output. |
 | **Logic Analyzer** | 8-channel digital trace of P0.0-P0.7 with history. |
 | **Wiring** | Drag external components (LED, button, sensors, OLED, Bluetooth, etc.) onto the canvas to extend the board. |
 | **Event Log** | Bus warnings — unmapped reads/writes (e.g. a stray pointer hitting `0xFFFFFFFF`). The badge shows the count. |

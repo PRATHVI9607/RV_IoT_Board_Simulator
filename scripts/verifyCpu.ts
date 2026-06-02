@@ -61,26 +61,26 @@ function assert(name: string, cond: boolean, extra = "") {
   assert("PC parked at 0x0E", e.cpu.pc === 0x0e, `pc=${e.cpu.pc.toString(16)}`);
 }
 
-// ---- Test 3: PUSH/POP + BL round trip ----
+// ---- Test 3: BL must actually branch (and set LR), not fall through ----
+// The function writes R1=0x55 so a fall-through (BL not taken) is detected:
+// if BL is mis-decoded, the function body is skipped and R1 stays 0.
 {
   const e = new Engine();
   const prog = words(
-    0xe3a0d902, // 0x00 MOV SP,#0x8000  (0x02 ror 18 = 0x8000) -> set stack
-    0xe28dd901, //      (placeholder, see note)
-    0xe3a00005, // 0x08 MOV R0,#5
-    0xeb000002, // 0x0C BL 0x1C
-    0xe3a00007, // 0x10 MOV R0,#7   (return lands here)
-    0xeafffffe, // 0x14 B .
-    0xe1a0f00e, // 0x18 (pad)
-    0xe12fff1e, // 0x1C BX LR  (function body: just return)
+    0xe3a00005, // 0x00 MOV R0,#5
+    0xeb000002, // 0x04 BL 0x14        -> must jump to the function
+    0xe3a00007, // 0x08 MOV R0,#7       (return lands here)
+    0xeafffffe, // 0x0C B .             (park)
+    0xe1a0f00e, // 0x10 (pad word)
+    0xe3a01055, // 0x14 MOV R1,#0x55    (function body — proves we branched)
+    0xe12fff1e, // 0x18 BX LR           (return)
   );
-  // Fix SP setup: MOV SP,#0x40008000 isn't directly encodable; use 0x8000 then
-  // it doesn't matter for this test (BL/BX use LR, not the stack).
   e.loadBinary(prog, "bl.bin");
   e.run(50);
-  console.log("Test 3: BL / BX LR");
+  console.log("Test 3: BL branches + returns");
+  assert("R1 = 0x55 (function body ran)", e.cpu.regs[1] === 0x55, `got ${e.cpu.regs[1].toString(16)}`);
   assert("R0 = 7 after return", e.cpu.regs[0] === 7, `got ${e.cpu.regs[0]}`);
-  assert("PC parked at 0x14", e.cpu.pc === 0x14, `pc=${e.cpu.pc.toString(16)}`);
+  assert("PC parked at 0x0C", e.cpu.pc === 0x0c, `pc=${e.cpu.pc.toString(16)}`);
 }
 
 console.log(failures === 0 ? "\nALL TESTS PASSED" : `\n${failures} FAILURE(S)`);

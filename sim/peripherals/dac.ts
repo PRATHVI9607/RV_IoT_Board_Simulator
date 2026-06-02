@@ -5,8 +5,13 @@ import type { AccessSize, Peripheral } from "./types";
  *
  *  DACR  0xE006C000  [15:6] VALUE (10-bit), [16] BIAS
  *
- * The DAC output feeds the virtual oscilloscope automatically.
+ * The output feeds the virtual oscilloscope. Samples are captured on a fixed
+ * time base (every SAMPLE_INTERVAL PCLK ticks) rather than on every register
+ * write, so a fast waveform renders as a legible trace instead of an aliased
+ * solid block.
  */
+const SAMPLE_INTERVAL = 200; // PCLK ticks between scope samples
+
 export class DAC implements Peripheral {
   readonly name = "DAC";
   readonly base = 0xe006c000;
@@ -17,12 +22,14 @@ export class DAC implements Peripheral {
   readonly samples = new Float32Array(4096);
   private writePos = 0;
   private _sampleCount = 0;
+  private cycleAccum = 0;
 
   reset(): void {
     this.dacr = 0;
     this.samples.fill(0);
     this.writePos = 0;
     this._sampleCount = 0;
+    this.cycleAccum = 0;
   }
 
   /** DAC output voltage 0–3.3 V. */
@@ -35,18 +42,26 @@ export class DAC implements Peripheral {
     return (this.dacr >>> 6) & 0x3ff;
   }
 
-  get sampleCount(): number { return this._sampleCount; }
+  get sampleCount(): number {
+    return this._sampleCount;
+  }
+
+  /** Capture the current output level onto the scope buffer on a fixed cadence. */
+  tick(cycles: number): void {
+    this.cycleAccum += cycles;
+    while (this.cycleAccum >= SAMPLE_INTERVAL) {
+      this.cycleAccum -= SAMPLE_INTERVAL;
+      this.samples[this.writePos] = this.voltage;
+      this.writePos = (this.writePos + 1) & 4095;
+      this._sampleCount++;
+    }
+  }
 
   read(offset: number, _size: AccessSize): number {
     return offset === 0 ? this.dacr : 0;
   }
 
   write(offset: number, value: number, _size: AccessSize): void {
-    if (offset === 0) {
-      this.dacr = value >>> 0;
-      this.samples[this.writePos] = this.voltage;
-      this.writePos = (this.writePos + 1) & 4095;
-      this._sampleCount++;
-    }
+    if (offset === 0) this.dacr = value >>> 0;
   }
 }

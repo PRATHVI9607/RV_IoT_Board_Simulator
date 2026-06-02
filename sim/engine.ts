@@ -121,7 +121,7 @@ export class Engine {
       this.rtc, this.sysctl, this.pinconnect,
     ];
     for (const d of devices) this.bus.register(d);
-    this.tickables = [this.timer0, this.timer1, this.pwm, this.adc1, this.i2c0, this.i2c1];
+    this.tickables = [this.timer0, this.timer1, this.pwm, this.adc1, this.dac, this.i2c0, this.i2c1];
   }
 
   // ---- program loading ---------------------------------------------------

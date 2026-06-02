@@ -80,6 +80,8 @@ interface SimState {
   toggleBuzzerMute: () => void;
   toggle3D: () => void;
   togglePeripheral: (key: PeriphKey) => void;
+  /** Manually drive an input pin's external level (board pin manipulation). */
+  setPin: (port: 0 | 1, pin: number, high: boolean) => void;
   refresh: () => void;
 }
 
@@ -358,6 +360,10 @@ export const useSim = create<SimState>((set, get) => {
     },
     toggleBuzzerMute() { set(st => ({ buzzerMuted: !st.buzzerMuted })); },
     toggle3D() { set(st => ({ show3D: !st.show3D })); },
+    setPin(port, pin, high) {
+      eng.gpio.setExternalPin(port, pin, high);
+      if (eng.status !== "running") set({ snap: eng.snapshot() });
+    },
     togglePeripheral(key) {
       set(st => {
         const connected = { ...st.connected, [key]: !st.connected[key] };
