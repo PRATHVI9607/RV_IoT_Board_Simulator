@@ -36,8 +36,20 @@ export class ADC implements Peripheral {
 
   reset(): void {
     this.cr = this.gdr = this.stat = 0;
+    this.dr.fill(0);
     this.convDelay = 0;
     this.convertingCh = -1;
+  }
+
+  /** Per-channel data registers ADxDR0..7 (offsets 0x10..0x2C). */
+  private dr = new Uint32Array(8);
+
+  /** Record a finished conversion into both the global and channel registers. */
+  private storeResult(ch: number, v: number): void {
+    const word = ((v << 6) | (ch << 24) | 0x80000000) >>> 0;
+    this.gdr = word;
+    this.dr[ch] = ((v << 6) | 0x80000000) >>> 0; // ADxDRn has no CHN field
+    this.stat |= (1 << ch) | 0x100;
   }
 
   /** Set a virtual input value (0–1023) for a given channel. */
@@ -50,11 +62,7 @@ export class ADC implements Peripheral {
     if (this.cr & 0x00010000) {
       const sel = this.cr & 0xff;
       for (let ch = 0; ch < 8; ch++) {
-        if (sel & (1 << ch)) {
-          const v = this.inputs[ch];
-          this.gdr = (v << 6) | (ch << 24) | 0x80000000;
-          this.stat |= (1 << ch) | 0x100;
-        }
+        if (sel & (1 << ch)) this.storeResult(ch, this.inputs[ch]);
       }
       return;
     }
@@ -72,10 +80,7 @@ export class ADC implements Peripheral {
     if (this.convertingCh >= 0 && this.convDelay > 0) {
       this.convDelay = Math.max(0, this.convDelay - cycles);
       if (this.convDelay === 0) {
-        const ch = this.convertingCh;
-        const v = this.inputs[ch];
-        this.gdr = (v << 6) | (ch << 24) | 0x80000000;
-        this.stat |= (1 << ch) | 0x100;
+        this.storeResult(this.convertingCh, this.inputs[this.convertingCh]);
         this.convertingCh = -1;
       }
     }
@@ -86,6 +91,13 @@ export class ADC implements Peripheral {
   }
 
   read(offset: number, _size: AccessSize): number {
+    // Per-channel data registers ADxDR0..7 at 0x10, 0x14, ... 0x2C.
+    if (offset >= 0x10 && offset <= 0x2c) {
+      const ch = (offset - 0x10) >> 2;
+      const v = this.dr[ch];
+      this.dr[ch] &= ~0x80000000; // reading clears that channel's DONE
+      return v;
+    }
     switch (offset) {
       case 0x00: return this.cr;
       case 0x04: {

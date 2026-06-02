@@ -110,7 +110,7 @@ export class PWM implements Peripheral {
     value >>>= 0;
     switch (offset) {
       case 0x00: this.ir &= ~value; break;
-      case 0x04: this.tcr = value & 0x3; break;
+      case 0x04: this.tcr = value & 0xb; break; // bit0 enable, bit1 reset, bit3 PWM-enable
       case 0x08: this.tc = value; break;
       case 0x0c: this.pr = value; break;
       case 0x10: this.pc = value; break;
@@ -125,12 +125,12 @@ export class PWM implements Peripheral {
       case 0x30: this.mrShadow[6] = value; break;
       case 0x4c: this.pcr = value; break;
       case 0x50:
-        this.ler = value;
-        // Immediate latch if timer is stopped (common init pattern)
-        if (!(this.tcr & 0x1)) {
-          for (let i = 0; i < 7; i++) if (value & (1 << i)) this.mr[i] = this.mrShadow[i];
-          this.ler = 0;
-        }
+        // Latch the requested shadow match registers into the active registers
+        // immediately. (Real hardware latches on the next PWMTC=MR0 reset, but
+        // latching now is robust and avoids an MR0=0 chicken-and-egg deadlock
+        // when MR0 and the enable are written in either order.)
+        for (let i = 0; i < 7; i++) if (value & (1 << i)) this.mr[i] = this.mrShadow[i];
+        this.ler = 0;
         break;
     }
   }
