@@ -139,11 +139,13 @@ export class PixiScope {
 
   updateConfig(updates: Partial<OscConfig>): void {
     Object.assign(this.config, updates);
-    if ("phosphorMode" in updates || "width" in updates || "height" in updates) {
-      if (this.app) {
-        this.app.renderer.background.color = updates.phosphorMode ?? this.config.phosphorMode
-          ? BG_DARK : BG_MODERN;
-      }
+    if (this.app && ("width" in updates || "height" in updates)) {
+      const { width, height } = this.config;
+      this.app.renderer.resize(width, height);
+    }
+    if (this.app && ("phosphorMode" in updates || "width" in updates || "height" in updates)) {
+      const pMode = this.config.phosphorMode;
+      this.app.renderer.background.color = pMode ? BG_DARK : BG_MODERN;
       this.drawGrid();
     }
   }
