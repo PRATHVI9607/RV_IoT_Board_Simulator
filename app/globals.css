@@ -214,6 +214,11 @@ body {
   image-rendering: pixelated;
 }
 
+/* Lit 7-segment LED segment glow */
+.seg-on {
+  filter: drop-shadow(0 0 4px #ff8800);
+}
+
 /* Elevator shaft floor cell — fixed minimum height so the shaft is always legible */
 .elevator-floor-cell {
   min-height: 42px;

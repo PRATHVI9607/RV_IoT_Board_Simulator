@@ -1,248 +1,321 @@
-# LOKI-SIM — User Manual
+# LOKI-SIM — Complete User Manual
 
 **RV-IoT LPC2148 (ARM7TDMI-S) Board Simulator**
 
-A browser-based simulator for the RVCE RV-IoT ARM board. Upload a compiled
-`.hex` (from Keil uVision / Flash Magic), `.bin`, or `.elf` and watch it execute
-on a virtual board with live peripherals, a Keil-style debugger, an
-oscilloscope, a logic analyzer, and more.
+This manual is written so that **anyone can run any LPC2148 program** and wire up
+any peripheral without confusion. Read Section 3 (the workflow) and Section 5
+(the pin map) and you can run any lab.
 
 ---
 
-## 1. Getting started
+## Table of contents
+1. [Start the app](#1-start-the-app)
+2. [The screen at a glance](#2-the-screen-at-a-glance)
+3. [How to run ANY program (the 4-step workflow)](#3-how-to-run-any-program)
+4. [Connecting peripherals — the most important idea](#4-connecting-peripherals)
+5. [Peripheral pin map — what to write in your code](#5-peripheral-pin-map)
+6. [Driving inputs by hand (switches, sensors, buttons)](#6-driving-inputs-by-hand)
+7. [The debugger](#7-the-debugger)
+8. [The instruments (bottom panel)](#8-the-instruments)
+9. [Writing code that actually works on this board](#9-writing-code-that-works)
+10. [Per-lab quick recipes](#10-per-lab-quick-recipes)
+11. [Keyboard shortcuts](#11-keyboard-shortcuts)
+12. [Troubleshooting](#12-troubleshooting)
 
-### Run the app
+---
+
+## 1. Start the app
 ```bash
 npm install      # first time only
-npm run dev      # starts dev server
+npm run dev      # then open http://localhost:3000
 ```
-Open **http://localhost:3000** in your browser (Chrome/Edge recommended for the
-Web Audio buzzer and WebGL 3D board).
+Use Chrome or Edge (needed for the buzzer audio and the 3D board). Inside VS Code
+you can also do **Ctrl+Shift+P → "Simple Browser: Show"** → `http://localhost:3000`.
 
-> Inside VS Code you can also press **Ctrl+Shift+P → "Simple Browser: Show"** and
-> enter `http://localhost:3000` to preview it in the editor.
+---
 
-### Production build
-```bash
-npm run build
-npm run start
+## 2. The screen at a glance
+
+```
+┌─ TOOLBAR ───────────────────────────────────────────────────────────────┐
+│  Open · Run/Pause · Stop · Reset · Step · Speed · PC · cycles · STATUS    │
+├─ PERIPHERAL TRAY ─────────────────────────────────────────────────────────┤
+│  Connect: [LCD] [7-Seg] [Keypad] [ADC] [DAC] [DC Motor] [Stepper 1] ...   │
+├────────────────────────────────────────────────┬─────────────────────────┤
+│  BOARD                                          │  DEBUGGER                │
+│  • LPC2148 CPU (always shown, live pins)        │  [CPU] [Periph] [VIC]    │
+│  • Logic Controller: 8 LEDs + 8 switches        │  registers, disassembly, │
+│  • + every peripheral you CONNECT from the tray │  breakpoints, memory     │
+├────────────────────────────────────────────────┴─────────────────────────┤
+│  INSTRUMENTS: [Serial] [GPIO Pins] [Oscilloscope] [Logic] [Wiring] [Log]  │
+└───────────────────────────────────────────────────────────────────────────┘
 ```
 
----
-
-## 2. Loading a program
-
-There are three ways to load a compiled program:
-
-1. **Drag and drop** a `.hex` / `.bin` / `.elf` file anywhere onto the board.
-2. Click **Choose file** on the idle board overlay.
-3. Click **Open** in the top toolbar.
-
-A bundled demo program (`public/sample-blink.hex`) blinks the 8 LEDs and prints
-`RV-IoT OK` over UART0.
-
-| Format | Notes |
-|--------|-------|
-| `.hex` | Intel HEX — the format Keil uVision and Flash Magic produce. **Primary.** |
-| `.bin` | Raw binary, loaded at address `0x00000000`. |
-| `.elf` | ELF executable — also loads function/variable **symbol names** for the debugger. |
-
-On load, the CPU resets, Flash is programmed, and the simulator pauses at the
-reset vector ready to run.
+The board only shows the peripherals you **connect** (plus the CPU and the LED/
+switch bank, which are always present). This keeps everything large and on one
+screen instead of cramming all 13 peripherals at once.
 
 ---
 
-## 3. The toolbar (top bar)
+## 3. How to run ANY program
 
-| Control | Shortcut | What it does |
-|---------|----------|--------------|
-| **Open** | `Ctrl+O` | Load a program file |
-| ▶ **Run** | `F5` | Run at full speed until a breakpoint / stop |
-| ⏸ **Pause** | `F5` | Pause execution |
-| ⏹ **Stop** | `Ctrl+F5` | Stop and reset to the entry point |
-| ↺ **Reset** | `Ctrl+R` | Reset CPU + peripherals, reload program |
-| ↓ **Step Into** | `F11` | Execute one instruction (enters function calls) |
-| → **Step Over** | `F10` | Execute one instruction (runs calls to completion) |
-| ↑ **Step Out** | `Shift+F11` | Run until the current function returns |
-| ⚡ **Speed** | — | 0.25× / 0.5× / 1× / 2× / 10× / MAX execution rate |
+**Step 1 — Load the program.** Click **Open** (or drag the file onto the board).
+Accepted: `.hex` (Keil/Flash Magic output), `.bin`, or `.elf`.
 
-The right side shows the live **PC**, **cycle counter**, and **status**
-(IDLE / RUNNING / PAUSED / BREAKPOINT / HALTED / ERROR).
+**Step 2 — Connect the peripheral your code uses.** In the **tray** at the top,
+click the chip for the peripheral your program drives (e.g. **7-Seg**, **LCD**,
+**DC Motor**). It turns green = wired to the CPU. (See Section 4 for why.)
 
----
+**Step 3 — Set the speed and Run.** Most lab programs have long software-delay
+loops, so set speed to **10×** or **MAX** and press **Run (F5)**. Watch the
+peripheral respond. The status pill shows **RUNNING**.
 
-## 4. The board (center)
+**Step 4 — Inspect / interact.** Use the right-hand **Debugger** to watch
+registers/memory, set breakpoints (click a disassembly line), and the bottom
+**instruments** for serial output, the oscilloscope, or to drive input pins.
 
-Each peripheral zone is wired to real LPC2148 pins (shown in each zone's label).
-
-### Connecting / disconnecting peripherals (important)
-
-The RV-IoT board multiplexes many peripherals onto the **same pins** (e.g. the
-LCD, keypad, 7-segment, and stepper motors all share P0.16–P0.23). On real
-hardware you wire up only the peripheral you're using. LOKI-SIM mirrors this:
-each peripheral zone has an **ON / OFF connect toggle** in its top-right corner.
-
-- A **disconnected** peripheral is dimmed and **ignores all bus activity**, so a
-  program only drives the peripherals you actually connect.
-- This stops every shared-pin peripheral from reacting at once.
-
-**Defaults:** LCD, Keypad, LEDs, Switches, ADC, and DAC start **connected**.
-The 7-segment, DC motor, steppers, servos, buzzer, and elevator start
-**disconnected** — click their **ON** toggle when your program uses them.
-
-> Example: the LCD lab (`lab7.hex`) only needs the LCD. Leave everything else
-> disconnected and just the LCD lights up. For a stepper lab, click **ON** on
-> the Stepper zone (and optionally disconnect the LCD/keypad).
-
-### Displays
-- **20×4 LCD (HD44780)** — D4-D7 = P0.16-P0.19, RS = P0.20, EN = P1.25.
-  Renders characters your program writes. Click it to toggle the backlight.
-- **7-Segment (5-digit)** — serial shift register on DATA P0.19 / CLK P0.20 /
-  STROBE P0.30.
-
-### Input
-- **4×4 Matrix Keypad** — rows P0.16-P0.19 (output), columns P1.16-P1.19 (input).
-  Click keys, or use keyboard **0-9 / A-F**. The simulator handles the row-scan /
-  column-read protocol automatically.
-- **8 Switches** — slide switches on P0.8-P0.15. Click them, or press **1-8** on
-  your keyboard. Released = HIGH (pull-up), pressed = LOW (active-low).
-
-### Output indicators
-- **8 LEDs** — on P0.0-P0.7. Glow green when their pin is driven HIGH (output).
-- **LPC2148 chip** — the centerpiece. Every pin dot shows live state:
-  green = output HIGH, dim = output LOW, amber ring = input HIGH, hollow = input LOW.
-  Hover a pin to see its name and alternate function.
-
-### Analog
-- **ADC inputs** — drag the **LDR**, **LM35 temperature**, and **Potentiometer**
-  sliders to feed analog values into ADC1 channels 2/3/4 (P0.29/P0.30/P0.31).
-- **DAC output** — a live 0-3.3 V gauge fed from DACR (P0.25). Also drives
-  oscilloscope CH1.
-
-### Motors & actuators
-- **DC Motor (DRV8801)** — speed from PWM6 duty, direction from P0.28. Shaft spins.
-- **Stepper 1 & 2 (ULN2803)** — coil patterns on P0.16-19 / P0.20-23. Shows step
-  count, angle, and direction.
-- **Servo 1 & 2** — PWM4 (P0.21) / PWM5 (P0.22). Arm rotates to the commanded angle.
-- **Buzzer** — plays a square-wave tone (Web Audio) when driven. Use **Mute** to
-  silence it.
-- **Elevator** — see §7.
-
-### 2D / 3D toggle
-Once a program is loaded, the **3D** button (top-right of the board) switches to a
-Three.js 3D PCB render with orbit controls (drag to rotate, scroll to zoom). LEDs
-light up in 3D too. Click **2D** to switch back.
+> If nothing happens: is the right peripheral connected (Step 2)? Is the speed
+> high enough? Is the status RUNNING (not ERROR)? See Section 12.
 
 ---
 
-## 5. The debugger (right panel)
+## 4. Connecting peripherals
 
-Three tabs:
+**Why this exists:** the real RV-IoT board multiplexes many peripherals onto the
+**same MCU pins**. For example **P0.16–P0.19** are shared by the LCD data bus, the
+keypad rows, the 7-segment data line, *and* the stepper-motor coils. On real
+hardware you physically wire up only the peripheral you're using. LOKI-SIM does
+the same with the **tray**: a peripheral only reacts to the bus while it is
+**connected (green)**.
 
-### CPU
-- **Registers** — R0-R15, SP, LR, PC, and CPSR. Changed values flash amber.
-  Flags N/Z/C/V/I/F/T and processor mode shown below.
-- **Disassembly** — live ARM/Thumb disassembly centered on the PC (highlighted).
-  **Click any line to set/clear a breakpoint** (red dot). When the PC reaches a
-  breakpoint the whole screen flashes red and execution pauses.
-- **Breakpoints** — list of active breakpoints (appears when you have some).
-- **Memory** — hex dump. Type an address and press Enter to jump, or click
-  **Flash** / **SRAM**. Colors: blue = Flash, green = SRAM, amber = peripherals.
+- **Connect** a peripheral → it appears on the board and interprets the pins.
+- **Disconnect** → it's ignored, so it won't "react" to a program meant for a
+  different peripheral sharing those pins.
 
-### Periph
-Expandable tree of peripheral registers (GPIO, UART0, Timer0, PWM, ADC1, DAC,
-VIC) with live hex values. Click a group to expand it.
+This is why, by default, only the CPU and the LED/switch bank are shown — you
+connect exactly what your program needs.
 
-### VIC
-The Vectored Interrupt Controller table — every IRQ source with its enable /
-raw / pending / FIQ status. Pending interrupts highlight red.
+**Pins that are shared (connect only one at a time):**
+
+| Pins | Peripherals that use them |
+|------|---------------------------|
+| P0.16–P0.19 | LCD data (D4–D7), Keypad rows, Stepper 1 coils, Buzzer |
+| P0.19 / P0.20 / P0.30 | 7-Segment DATA / CLK / STROBE (P0.20 is also LCD RS) |
+| P0.20–P0.23 | Stepper 2 coils |
+| P1.16–P1.19 | Keypad columns, Elevator floor LEDs |
 
 ---
 
-## 6. The instruments (bottom panel)
+## 5. Peripheral pin map
+
+These are the exact pins LOKI-SIM models. **Write your code to these pins** and
+the peripheral will respond; use other pins and it won't (that's intended).
+
+### Discrete I/O (always on the board)
+| Peripheral | Pins | Notes |
+|-----------|------|-------|
+| 8 LEDs | **P0.0–P0.7** (outputs) | LED lit when the pin is driven HIGH |
+| 8 Switches | **P0.8–P0.15** (inputs) | Released = HIGH (pull-up), pressed = LOW |
+
+### LCD — 20×4 alphanumeric (HD44780, 4-bit)
+| Signal | Pin |
+|--------|-----|
+| Data D4–D7 | **P0.16, P0.17, P0.18, P0.19** |
+| RS (register select) | **P0.20** (0 = command, 1 = data) |
+| EN (enable strobe) | **P1.25** (data latched on the falling edge) |
+| RW | tied to GND (write-only) |
+
+Send each byte as **two nibbles** (high then low) with an EN pulse each. Your
+init can configure P0.16–P0.23 as outputs — the model reads only the low nibble
++ RS, so 4-bit drivers work even if all 8 pins are set as outputs.
+
+### 7-Segment — 5 digits, serial shift register (common-anode)
+| Signal | Pin |
+|--------|-----|
+| DATA | **P0.19** |
+| CLK | **P0.20** (bit shifted in on the rising edge, MSB first) |
+| STROBE | **P0.30** (40 bits latch into 5 digits on the rising edge) |
+
+Segment codes are **active-low** (common-anode): bit 0 = segment ON. Bit order
+`a,b,c,d,e,f,g,dp` = bits 0..7. `0xFF` = blank. (e.g. `0x8E` = 'F', `0xC0` = '0'.)
+
+### Matrix Keypad — 4×4
+| Signal | Pins |
+|--------|------|
+| Rows (CPU outputs) | **P0.16, P0.17, P0.18, P0.19** |
+| Columns (CPU inputs) | **P1.16, P1.17, P1.18, P1.19** |
+
+Scan by driving one row LOW and reading the columns. A pressed key pulls its
+column LOW. Click keys on screen or press `0–9`, `A–F` on your keyboard.
+
+### ADC1 — 10-bit (drag the sliders to set inputs)
+| Channel | Pin | Source |
+|---------|-----|--------|
+| AD1.2 | **P0.29** | LDR (light) |
+| AD1.3 | **P0.30** | LM35 temperature |
+| AD1.4 | **P0.31** | Potentiometer |
+
+Registers: `AD1CR` (0xE0034000), `AD1GDR` (+0x04, result in bits [15:6], DONE in
+bit 31). Software-START and BURST modes both work.
+
+### DAC — 10-bit output
+| Signal | Pin | Register |
+|--------|-----|----------|
+| AOUT | **P0.25** | `DACR` (0xE006C000), VALUE in bits [15:6] |
+
+`V = (VALUE / 1023) × 3.3`. The output feeds **oscilloscope CH1** automatically.
+
+### PWM-driven actuators
+| Peripheral | PWM ch | Pin | Extra |
+|-----------|--------|-----|-------|
+| DC Motor (DRV8801) | PWM6 | **P0.9** (speed) | direction on **P0.28** |
+| Servo 1 | PWM4 | **P0.21** | 5 % duty = 0°, 10 % = 180° |
+| Servo 2 | PWM5 | **P0.22** | same mapping |
+| Buzzer | PWM1 or GPIO | **P0.16–P0.19** | tone via Web Audio |
+
+PWM base 0xE0014000. Set MR0 = period, MRx = match (duty), enable in PWMTCR,
+latch with PWMLER, route in PWMPCR.
+
+### Stepper motors (ULN2803)
+| Motor | Coil pins |
+|-------|-----------|
+| Stepper 1 | **P0.16–P0.19** |
+| Stepper 2 | **P0.20–P0.23** |
+
+Drive full-step sequence `1000 → 0100 → 0010 → 0001` (or reverse). The UI shows
+step count, angle, and direction.
+
+### Elevator
+| Part | Pins |
+|------|------|
+| Floor call buttons (inputs) | **P0.16–P0.19** |
+| Floor indicator LEDs (outputs) | **P1.16–P1.19** |
+| Lift motor | DC Motor (PWM6 + P0.28) |
+
+The car shows whichever P1.16–P1.19 LED your program drives HIGH.
+
+### UART0 (serial) — always available
+TXD0 = **P0.0**, RXD0 = **P0.1**. Base 0xE000C000. Write bytes to `U0THR`; they
+appear in the **Serial Monitor**. Type there to deliver bytes to `U0RBR`.
+
+---
+
+## 6. Driving inputs by hand
+
+You don't need a peripheral to feed an input — open the **GPIO Pins** tab
+(bottom panel). It lists every pin with its direction (IN/OUT) and live level.
+**Click the HIGH/LOW button on any INPUT pin** to drive it. Use this to simulate
+a sensor line, a button, or any external signal your code polls.
+
+- **Switches** (P0.8–P0.15): click them on the board, or press `1`–`8`.
+- **Keypad** (P1.16–19 cols): click keys, or press `0–9`/`A–F`.
+- **ADC**: drag the LDR / LM35 / Potentiometer sliders.
+- **Any other input pin**: GPIO Pins tab → click HIGH/LOW.
+
+---
+
+## 7. The debugger (right panel)
+
+**CPU tab**
+- **Registers** — R0–R15, SP, LR, PC, CPSR (changed values flash amber), plus the
+  N/Z/C/V/I/F/T flags and processor mode.
+- **Disassembly** — live ARM/Thumb listing centred on PC. **Click a line to set a
+  breakpoint** (red dot); execution pauses there and the screen flashes red.
+- **Memory** — hex dump. Type an address + Enter to jump, or click **Flash** /
+  **SRAM**.
+
+**Periph tab** — live register values for GPIO, UART, Timer, PWM, ADC, DAC, VIC.
+
+**VIC tab** — interrupt controller: every IRQ source with enable / pending / FIQ.
+
+Stepping: **Step Into (F11)**, **Step Over (F10)**, **Step Out (Shift+F11)**.
+
+---
+
+## 8. The instruments (bottom panel)
 
 | Tab | Use |
 |-----|-----|
-| **Serial Monitor** | UART0 terminal. Output from your program appears here. Type in the input box and press Enter (or the send button) to send data to the CPU's RX. Baud rate is shown. |
-| **GPIO Pins** | Direct pin control. Lists every pin (P0.0–P0.31, P1.16–P1.31) with its direction (IN/OUT) and live level. Click any **INPUT** pin's HIGH/LOW button to drive it by hand — handy for feeding switch/sensor inputs without wiring a peripheral. |
-| **Oscilloscope** | 4-channel scope. CH1 = DAC, CH2 = PWM6, CH3 = P0.0, CH4 = P0.1. Adjust the timebase, toggle **CRT** phosphor mode, pause, and export a PNG. Run a DAC program (e.g. the waveform lab) and watch CH1 trace the output. |
-| **Logic Analyzer** | 8-channel digital trace of P0.0-P0.7 with history. |
-| **Wiring** | Drag external components (LED, button, sensors, OLED, Bluetooth, etc.) onto the canvas to extend the board. |
-| **Event Log** | Bus warnings — unmapped reads/writes (e.g. a stray pointer hitting `0xFFFFFFFF`). The badge shows the count. |
+| **Serial Monitor** | UART0 terminal. Program output appears here; type to send to the CPU. |
+| **GPIO Pins** | Direct pin control — view every pin, click INPUT pins to drive them. |
+| **Oscilloscope** | 4 channels: CH1 DAC, CH2 PWM6, CH3 P0.0, CH4 P0.1. Timebase, CRT mode, PNG export. |
+| **Logic Analyzer** | 8-channel digital trace of P0.0–P0.7. |
+| **Wiring** | Drag external parts (sensors, OLED, Bluetooth…) onto a canvas. |
+| **Event Log** | Bus warnings — unmapped reads/writes (a stray pointer, wrong address). |
 
 ---
 
-## 7. Running the Elevator lab (e.g. `lab1b.hex`)
+## 9. Writing code that works
 
-The elevator interface models the standard RVCE elevator-control experiment.
+LOKI-SIM runs **real LPC2148 machine code** and is strict, so wrong code behaves
+like wrong code on real hardware:
 
-**Pin mapping**
-- Floor **call buttons** → P0.16-P0.19 (CPU inputs, active-low)
-- Floor **indicator LEDs** → P1.16-P1.19 (CPU outputs)
-- Lift **motor** → DC motor interface (PWM6 + direction P0.28)
+- **Use the exact pins in Section 5.** If you drive the LCD on the wrong pins,
+  nothing shows — the model only responds to the correct pins/protocol.
+- **Connect the peripheral** (Section 4) or it won't react at all.
+- **Configure pin direction** with IODIR before driving outputs / reading inputs.
+- **PLL / startup:** the simulator auto-acknowledges PLL lock, so standard Keil
+  startup code runs; you don't need real clock timing.
+- **Bad programs fail visibly:**
+  - A corrupt `.hex` (bad checksum / record) is rejected on load with an error.
+  - An undefined/garbage instruction sets the status to **ERROR** and halts.
+  - Accessing an unmapped address is logged in the **Event Log** and reads back
+    `0xDEADC0DE`.
+  - A program for the wrong pins simply produces no peripheral activity.
 
-**How to use it**
-1. Load `lab1b.hex` and press **Run** (`F5`).
-2. The **car position** is shown by which floor indicator LED (P1.16-P1.19) the
-   program drives HIGH. The highlighted cell with `▣` is the car.
-3. Click a **call button (1-4)** next to the shaft to request a floor. This pulls
-   the corresponding P0.16-P0.19 input LOW, exactly like pressing the physical
-   button. Hold it until the program scans it.
-4. While the motor runs, an **↑ / ↓ arrow** appears and the status reads
-   `GOING UP` / `GOING DOWN`.
-
-> **Tip:** if the car doesn't move, open the **Periph → GPIO** tab and watch
-> `IO0PIN` (does your button press register?) and `IO1SET`/`IO1PIN` (which floor
-> LED is the program lighting?). The elevator UI mirrors exactly what those
-> registers say. If the program uses different pins than the standard mapping
-> above, the indicators follow PORT1 outputs.
-
----
-
-## 8. Keyboard shortcuts (full list)
-
-| Key | Action |
-|-----|--------|
-| `F5` | Run / Pause |
-| `F10` | Step Over |
-| `F11` | Step Into |
-| `Shift+F11` | Step Out |
-| `Ctrl+F5` | Stop |
-| `Ctrl+R` | Reset & reload |
-| `F9` | Toggle breakpoint at the current PC |
-| `Ctrl+O` | Open a program file |
-| `1`-`8` | Toggle switches 1-8 |
-| `0`-`9`, `A`-`F` | Press the matching keypad key |
-| `Ctrl+Shift+P` | Open the command palette (search all actions) |
-| `Esc` | Close the command palette / dialogs |
+Minimum recipe for a GPIO peripheral:
+```c
+IODIR0 |= mask;     // set the pins you drive as outputs
+IOSET0  = mask;     // drive HIGH   (or IOCLR0 = mask for LOW)
+x = IOPIN0;         // read inputs
+```
 
 ---
 
-## 9. Troubleshooting
+## 10. Per-lab quick recipes
 
-| Symptom | Fix |
-|---------|-----|
-| Program loads but nothing happens | Press **Run** (`F5`). Check the status reads RUNNING. |
-| Status shows **ERROR** | The CPU hit an undefined instruction. Check the disassembly at the PC — the `.hex` may target an unsupported coprocessor op. |
-| Status shows **HALTED** | The program reached an idle state (e.g. `B .` infinite loop) with no peripheral activity. Usually normal at end-of-program. |
-| LCD shows nothing | Confirm the program uses 4-bit mode on P0.16-19 with EN on P1.25. Check the **Periph → GPIO** tab to see EN toggling. |
-| Buzzer is silent | Click **Mute** to unmute; some browsers require a click on the page first before audio can start. |
-| Lots of Event Log warnings | The program is accessing unmodeled addresses. Usually harmless; the simulator returns `0xDEADC0DE` for those reads. |
-| Layout looks cramped | The app targets desktop ≥ 1280px wide. Maximize the window; panels and the board scroll independently. |
+| Lab | Connect (tray) | Speed | What you see |
+|-----|----------------|-------|--------------|
+| LED blink | (LEDs always on) | 10× | LEDs on P0.0–7 toggle |
+| LCD message | **LCD** | MAX | text on the 20×4 LCD |
+| 7-segment (FIRE/HELP) | **7-Seg** | MAX | scrolling/fixed digits |
+| Keypad scan | **Keypad** | 2× | pressed keys read by CPU |
+| DAC waveform | **DAC** | MAX | waveform on Oscilloscope CH1 |
+| ADC read | **ADC** | 2× | move a slider, value changes |
+| DC motor / PWM | **DC Motor** | MAX | shaft spins, speed = duty |
+| Stepper | **Stepper 1** | MAX | shaft steps, angle counts |
+| Servo | **Servo 1** | MAX | arm moves to the angle |
+| Elevator | **Elevator** | MAX | car moves between floors |
 
 ---
 
-## 10. Architecture (for the curious)
+## 11. Keyboard shortcuts
 
-- **CPU**: ARM7TDMI-S core in TypeScript — full ARM32 + Thumb instruction sets,
-  barrel shifter, banked registers, exceptions, and the VIC.
-- **Memory**: Flash 512 KB (`0x00000000`), SRAM 32 KB (`0x40000000`), MMIO
-  peripherals (`0xE0000000+`), VIC (`0xFFFFF000`).
-- **Peripherals**: GPIO, UART0/1, Timer0/1, PWM, ADC1, DAC, VIC, I2C0/1,
-  SPI0/1, RTC, plus the LCD and keypad GPIO-snoop models.
-- **Engine loop**: runs in `requestAnimationFrame`; the speed control scales how
-  many instructions execute per frame.
-- **Stack**: Next.js 14, React 18, TypeScript, Zustand, Tailwind v4, Motion,
-  PixiJS (oscilloscope), Three.js (3D board), Phosphor Icons.
+| Key | Action | Key | Action |
+|-----|--------|-----|--------|
+| `F5` | Run / Pause | `Ctrl+F5` | Stop |
+| `F10` | Step Over | `Ctrl+R` | Reset & reload |
+| `F11` | Step Into | `F9` | Breakpoint at PC |
+| `Shift+F11` | Step Out | `Ctrl+O` | Open file |
+| `1`–`8` | Toggle switches | `0–9`,`A–F` | Keypad keys |
+| `Ctrl+Shift+P` | Command palette | `Esc` | Close dialogs |
 
-See `PRD.md` for the full product specification.
+---
+
+## 12. Troubleshooting
+
+| Symptom | Cause / fix |
+|---------|-------------|
+| Peripheral does nothing | **Connect it in the tray** (Section 4); check the pins match Section 5. |
+| Loaded but idle | Press **Run** and raise the speed to 10×/MAX (long delay loops). |
+| Status = **ERROR** | Undefined instruction — the `.hex` may use an unsupported (coprocessor) op; check the disassembly at PC. |
+| Status = **HALTED** | Program reached an idle `while(1)` — usually normal at the end. |
+| 7-seg / LCD shows garbage | Make sure the program uses the Section 5 pins and standard HD44780 / common-anode codes. |
+| Lots of Event-Log warnings | Program is hitting unmapped addresses (often a stack/pointer bug). |
+| Display looks cut off | App targets ≥ 1366-wide screens; maximize the window. Each panel scrolls on its own. |
+| Buzzer silent | Click **Mute** to unmute; click the page once (browsers gate audio until interaction). |
+
+---
+
+*Built on Next.js + a from-scratch ARM7TDMI-S core. See `PRD.md` for the full
+specification and `README`/source for architecture.*

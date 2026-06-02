@@ -312,6 +312,14 @@ export class ARM7 {
     const c = op >>> 28;
     if (!this.cond(c)) return;
 
+    // Permanently-UNDEFINED instruction space (ARM UDF, e.g. 0xE7F000F0).
+    // Compilers emit this as a trap for unreachable code / aborts; treat it as
+    // a fault so garbage or wrong programs halt visibly instead of running on.
+    if ((op & 0x0ff000f0) === 0x07f000f0) {
+      this.status = "undefined";
+      return;
+    }
+
     // Branch and Branch with Link (and BX via 0x12 special form below).
     // Mask 0x0e so both B (opcode 0xA) and BL (opcode 0xB, bit24=L) match.
     if ((op & 0x0e000000) === 0x0a000000) {

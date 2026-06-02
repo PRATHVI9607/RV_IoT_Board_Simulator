@@ -98,7 +98,11 @@ export type PeriphKey =
  * peripherals it actually uses. The user connects others as needed.
  */
 const DEFAULT_CONNECTED: Record<PeriphKey, boolean> = {
-  lcd: true, keypad: true, leds: true, switches: true, adc: true, dac: true,
+  // LEDs + switches are always shown (P0.0-15, dedicated). Everything else
+  // starts disconnected so the board only shows what a program actually uses;
+  // connect the peripherals you need from the tray.
+  leds: true, switches: true,
+  lcd: false, keypad: false, adc: false, dac: false,
   sevenSeg: false, dcMotor: false, stepper1: false, stepper2: false,
   servo1: false, servo2: false, buzzer: false, elevator: false,
 };
@@ -234,7 +238,7 @@ export const useSim = create<SimState>((set, get) => {
     bpFlash: 0,
     selectedMemAddr: 0x40000000,
     adcInputs: new Array(8).fill(512),
-    sevenSegBuffer: new Array(5).fill(0),
+    sevenSegBuffer: new Array(5).fill(0xff), // 0xFF = blank (common-anode)
     stepperState: [
       { steps: 0, angle: 0, cw: true, coils: 0, prevCoils: 0 },
       { steps: 0, angle: 0, cw: true, coils: 0, prevCoils: 0 },

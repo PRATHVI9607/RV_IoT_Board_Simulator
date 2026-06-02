@@ -15,9 +15,13 @@ const DATA_PORT = 0, DATA_PIN = 19;
 const CLK_PORT = 0, CLK_PIN = 20;
 const STB_PORT = 0, STB_PIN = 30;
 
+// Blank digit = all segments off. The RV-IoT display is COMMON-ANODE
+// (active-low), so 0xFF means "all segments off" (blank).
+const BLANK = 0xff;
+
 export class SevenSeg {
   private shift: bigint = 0n;     // up to 40 bits
-  private digits = new Uint8Array(5);
+  private digits = new Uint8Array(5).fill(BLANK);
   private prevClk = false;
   private prevStb = false;
 
@@ -30,7 +34,7 @@ export class SevenSeg {
 
   reset(): void {
     this.shift = 0n;
-    this.digits.fill(0);
+    this.digits.fill(BLANK);
     this.prevClk = false;
     this.prevStb = false;
     this.revision++;
@@ -39,7 +43,7 @@ export class SevenSeg {
   setEnabled(on: boolean): void {
     if (this.enabled === on) return;
     this.enabled = on;
-    if (!on) this.digits.fill(0);
+    if (!on) this.digits.fill(BLANK);
     this.revision++;
   }
 

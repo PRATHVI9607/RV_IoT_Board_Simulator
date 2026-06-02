@@ -42,7 +42,7 @@ export function SerialMonitor() {
       />
       <pre
         ref={termRef}
-        className="terminal-output min-h-0 flex-1 overflow-auto p-2 font-mono text-[11px] leading-relaxed text-signal"
+        className="terminal-output min-h-0 flex-1 overflow-auto p-3 font-mono text-[14px] leading-[1.6] text-signal"
       >
         {serial || (
           <span className="text-muted/50">
@@ -52,7 +52,7 @@ export function SerialMonitor() {
       </pre>
       <div className="flex items-center gap-2 border-t border-line p-2">
         <input
-          className="flex-1 rounded border border-line bg-bg px-2 py-1 font-mono text-[11px] text-fg outline-none focus:border-accent-line"
+          className="flex-1 rounded border border-line bg-bg px-3 py-1.5 font-mono text-[13px] text-fg outline-none focus:border-accent-line"
           placeholder="Type to send to UART0 RX..."
           value={input}
           onChange={(e) => setInput(e.target.value)}

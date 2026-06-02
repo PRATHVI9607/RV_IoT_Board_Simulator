@@ -48,13 +48,13 @@ function PinRow({ port, pin }: PinRowProps) {
         )}
       />
       {/* pin name */}
-      <span className="w-12 shrink-0 font-mono text-[10px] text-fg/80">
+      <span className="w-12 shrink-0 font-mono text-[12px] text-fg/90">
         P{port}.{pin}
       </span>
       {/* direction badge */}
       <span
         className={cn(
-          "w-8 shrink-0 rounded text-center font-mono text-[8px] uppercase",
+          "w-9 shrink-0 rounded text-center font-mono text-[9px] uppercase",
           isOutput ? "bg-[rgba(74,222,128,0.12)] text-signal" : "bg-pane text-muted",
         )}
       >
@@ -62,7 +62,7 @@ function PinRow({ port, pin }: PinRowProps) {
       </span>
       {/* level / toggle */}
       {isOutput ? (
-        <span className={cn("w-9 text-center font-mono text-[10px]", high ? "text-signal" : "text-muted/50")}>
+        <span className={cn("w-11 text-center font-mono text-[11px]", high ? "text-signal" : "text-muted/50")}>
           {high ? "HIGH" : "LOW"}
         </span>
       ) : (
@@ -71,7 +71,7 @@ function PinRow({ port, pin }: PinRowProps) {
           onClick={() => setPin(port, pin, !high)}
           title="Toggle input level"
           className={cn(
-            "w-9 rounded border text-center font-mono text-[9px] transition-colors",
+            "w-11 rounded border py-0.5 text-center font-mono text-[10px] transition-colors",
             high
               ? "border-accent-line bg-accent-soft text-accent"
               : "border-line-strong bg-pane text-muted hover:text-fg",
@@ -81,7 +81,7 @@ function PinRow({ port, pin }: PinRowProps) {
         </button>
       )}
       {/* alt function */}
-      <span className="truncate font-mono text-[8px] text-muted/50">{fn ?? ""}</span>
+      <span className="truncate font-mono text-[10px] text-muted/50">{fn ?? ""}</span>
     </div>
   );
 }
